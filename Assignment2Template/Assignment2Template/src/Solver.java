@@ -35,9 +35,7 @@ class Solver {
             return Collections.min(domain);
         }
 
-        public Integer Max(){
-            return Collections.max(domain);
-        }
+        public Integer Max(){ return Collections.max(domain); }
 
         public boolean contains(int x){
             return domain.contains(x);
@@ -55,22 +53,13 @@ class Solver {
             return AssignedValue != null;
         }
 
-        public void remove(int x){
-            domain.remove(x);
-        }
-
-        public void removeBelow(int y){
-            domain.removeIf(x -> x < y);
-        }
-
-        public void removeAbove(int y){
-            domain.removeIf(x -> x > y);
-        }
         // TODO: Add any methods you want here...
     }
 
     static abstract class Constraint {
         public abstract boolean check();
+        public abstract List<Integer> GetDomainForVariable(Variable var, List<Integer> domain);
+        public abstract boolean containsVariable(Variable var);
     }
 
     static class NotEqConstraint extends Constraint {
@@ -104,6 +93,35 @@ class Solver {
             return x1.AssignedValue != x2.AssignedValue + c;
         }
         // TODO: Add any methods you want here...
+        public List<Integer> GetDomainForVariable(Variable var, List<Integer> domain)
+        {
+            if(x1.equals(var))
+            {
+                if(x2.isAssigned()){
+                    if(domain.contains(x2.AssignedValue + c))
+                        domain.removeAll(Arrays.asList(x2.AssignedValue + c));
+                } else if(x2.domain.size() == 1){
+                    if(domain.contains(x2.domain.get(0) + c))
+                        domain.removeAll(Arrays.asList(x2.domain.get(0) + c));
+                }
+            }
+            else
+            {
+                if(x1.isAssigned()){
+                    if(domain.contains(x1.AssignedValue - c))
+                        domain.removeAll(Arrays.asList(x1.AssignedValue - c));
+                } else if(x1.domain.size() == 1){
+                    if(domain.contains(x1.domain.get(0) - c))
+                        domain.removeAll(Arrays.asList(x1.domain.get(0) - c));
+                }
+            }
+
+            return domain;
+        }
+
+        public boolean containsVariable(Variable var){
+            return x1.equals(var) || x2.equals(var);
+        }
     }
 
     static class AllDiffConstraint extends Constraint {
@@ -125,10 +143,37 @@ class Solver {
             // TODO: Add any more logic you want here...
         }
 
-        public boolean check(){
-            Integer assignedSize = (int) Arrays.stream(xs).filter(Variable::isAssigned).map(x-> x.AssignedValue).count();
-            Integer distinctSize = (int) Arrays.stream(xs).filter(Variable::isAssigned).map(x-> x.AssignedValue).distinct().count();
-            return assignedSize == distinctSize;
+        public boolean check() {
+            Set<Integer> assigned = new HashSet<>();
+            for (Variable var : xs) {
+                if (var.isAssigned()) {
+                    if (!assigned.add(var.AssignedValue)) return false;
+                }
+            }
+            return true;
+        }
+
+        public List<Integer> GetDomainForVariable(Variable var, List<Integer> domain)
+        {
+            Set<Integer> toRemove = new HashSet<>();
+
+            for (Variable x : xs) {
+                if(x.equals(var))
+                    continue;
+                if (x.isAssigned()) {
+                    toRemove.add(x.AssignedValue);
+                } else if (x.domain.size() == 1) {
+                    toRemove.add(x.domain.get(0));
+                }
+            }
+
+            domain.removeAll(toRemove);
+
+            return domain;
+        }
+
+        public boolean containsVariable(Variable var){
+            return Arrays.asList(xs).contains(var);
         }
     }
 
@@ -160,17 +205,76 @@ class Solver {
         public boolean check(){
             int total = 0;
             for(int i = 0; i < xs.length; i++){
-                if (!xs[i].isAssigned()) return true;
-                total += xs[i].AssignedValue * ws[i];
+                if (xs[i].isAssigned())
+                    total += xs[i].AssignedValue * ws[i];
+                else
+                    return true;
             }
             return total >= c;
         }
-        // TODO: Add any methods you want here...
+
+        public List<Integer> GetDomainForVariable(Variable var, List<Integer> domain) {
+            List<Integer> possibleOptions = new ArrayList<>(domain.stream().sorted().toList());
+            boolean isMinimize = ws[Arrays.stream(xs).toList().indexOf(var)] < 0;
+            if(isMinimize){
+                for (int i = 0; i < possibleOptions.size(); i ++) {
+                    int total = 0, testedOption = possibleOptions.get(i);
+
+                    for (int j = 0; j < xs.length; j++) {
+                        if (var.equals(xs[j])) {
+                            total += testedOption * ws[j];
+                        } else if (xs[j].isAssigned()) {
+                            total += xs[j].AssignedValue * ws[j];
+                        } else {
+                            if (ws[j] >= 0)
+                                total += xs[j].Max() * ws[j];
+                            else
+                                total += xs[j].Min() * ws[j];
+                        }
+                    }
+
+                    if (total < c) {
+                        var filtered =  new ArrayList<>(possibleOptions.stream().filter(x -> x < testedOption).toList());
+                        return filtered;
+                    }
+                }
+            }
+            else {
+                for (int i = possibleOptions.size() - 1; i >= 0; i--) {
+                    int total = 0, testedOption = possibleOptions.get(i);
+
+                    for (int j = 0; j < xs.length; j++) {
+                        if (var.equals(xs[j])) {
+                            total += testedOption * ws[j];
+                        } else if (xs[j].isAssigned()) {
+                            total += xs[j].AssignedValue * ws[j];
+                        } else {
+                            if (ws[j] >= 0)
+                                total += xs[j].Max() * ws[j];
+                            else
+                                total += xs[j].Min() * ws[j];
+                        }
+                    }
+
+                    if (total < c) {
+                        var filtered = new ArrayList<>(possibleOptions.stream().filter(x -> x > testedOption).toList());
+                        return filtered;
+                    }
+                }
+            }
+
+            return possibleOptions;
+        }
+
+        public boolean containsVariable(Variable var){
+            return Arrays.asList(xs).contains(var);
+        }
     }
 
     private Constraint[] constraints;
     private Variable[] variables;
     private List<int[]> foundSolutions;
+    private int solutionsExplored = 0;
     // TODO: Add any fields you want here...
 
     /**
@@ -238,11 +342,13 @@ class Solver {
      *                    only one needs to be found.
      */
     private void solve(boolean findAll) {
-        Propogate(0, findAll);
+        Propogate(findAll);
+        System.out.println(solutionsExplored);
     }
 
-    private boolean Propogate(int level, boolean findAll) {
-        if (level == variables.length) {
+    private boolean Propogate(boolean findAll) {
+        var variable = selectSmallestVariable();
+        if (variable == null) {
             int[] solution = new int[variables.length];
             for (int i = 0; i < variables.length; i++) {
                 solution[i] = variables[i].AssignedValue;
@@ -251,19 +357,30 @@ class Solver {
             return !findAll;
         }
 
-        Variable var = variables[level];
-        List<Integer> variableOptions = new ArrayList<>(var.domain);
+        List<Integer> domain = new ArrayList<>(variable.domain);
+        for(var constraint: constraints){
+            if(constraint.containsVariable(variable))
+                domain = constraint.GetDomainForVariable(variable, domain);
+        }
 
-        for (int value : variableOptions) {
-            var.Assign(value);
-            if (CheckConstraints()) {
-                if (Propogate(level + 1, findAll) && !findAll) {
+        for (int value : domain) {
+            variable.Assign(value);
+            if (CheckConstraintsFor(variable)) {
+                solutionsExplored++;
+                if (Propogate(findAll) && !findAll) {
                     return true;
                 }
             }
-            var.Unassign();
+            variable.Unassign();
         }
         return false;
+    }
+
+    private boolean CheckConstraintsFor(Variable var) {
+        for (Constraint c : constraints) {
+            if (c.containsVariable(var) && !c.check()) return false;
+        }
+        return true;
     }
 
     private boolean CheckConstraints() {
@@ -272,6 +389,14 @@ class Solver {
         }
         return true;
     }
+
+    private Variable selectSmallestVariable() {
+        return Arrays.stream(variables)
+            .filter(v -> !v.isAssigned())
+            .min(Comparator.comparingInt(v -> v.domain.size()))
+            .orElse(null);
+    }
+
 
     // You are free to add any helper methods you might want to use within
     //     the solver. Note, however, that you would not be allowed to call
