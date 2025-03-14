@@ -1,21 +1,9 @@
 import java.util.*;
 
-// Copy the below class to each of the Part 2 WebLab exercises
-//    when submitting your solution.
-// Make sure you copy the EXACT same version of your Solver in each
-//    of the five exercises before the deadline, you'll be
-//    automatically flagged for review if you don't!
-
-// Write your solver below here.
-// A template is already provided. You are allowed to deviate from this
-//     template, as long as all classes and methods mentioned in the
-//     description exist.
-
 class Solver {
     static class Variable {
         public List<Integer> domain;
         public Integer AssignedValue;
-        // TODO: Add any fields you want here...
 
         /**
          * Constructs a Variable with a specified domain.
@@ -27,8 +15,6 @@ class Solver {
         public Variable(List<Integer> domain) {
             // Variable initialization
             this.domain = new ArrayList<>(domain);
-
-            // TODO: Add any more logic you want here...
         }
 
         public Integer Min(){
@@ -36,10 +22,6 @@ class Solver {
         }
 
         public Integer Max(){ return Collections.max(domain); }
-
-        public boolean contains(int x){
-            return domain.contains(x);
-        }
 
         public void Assign(int x){
             AssignedValue = x;
@@ -52,8 +34,6 @@ class Solver {
         public boolean isAssigned() {
             return AssignedValue != null;
         }
-
-        // TODO: Add any methods you want here...
     }
 
     static abstract class Constraint {
@@ -66,7 +46,6 @@ class Solver {
         private Variable x1;
         private Variable x2;
         private int c;
-        // TODO: Add any fields you want here...
 
         /**
          * Constructs a NotEqConstraint:
@@ -83,8 +62,6 @@ class Solver {
             this.x1 = x1;
             this.x2 = x2;
             this.c = c;
-
-            // TODO: Add any more logic you want here...
         }
 
         public boolean check(){
@@ -92,7 +69,7 @@ class Solver {
                 return true;
             return x1.AssignedValue != x2.AssignedValue + c;
         }
-        // TODO: Add any methods you want here...
+
         public List<Integer> GetDomainForVariable(Variable var, List<Integer> domain)
         {
             if(x1.equals(var))
@@ -126,7 +103,6 @@ class Solver {
 
     static class AllDiffConstraint extends Constraint {
         private Variable[] xs;
-        // TODO: Add any fields you want here...
 
         /**
          * Constructs an AllDiffConstraint:
@@ -139,8 +115,6 @@ class Solver {
         public AllDiffConstraint(Variable[] xs) {
             // Variable initialization
             this.xs = xs;
-
-            // TODO: Add any more logic you want here...
         }
 
         public boolean check() {
@@ -181,7 +155,6 @@ class Solver {
         private Variable[] xs;
         private int[] ws;
         private int c;
-        // TODO: Add any fields you want here...
 
         /**
          * Constructs an IneqConstraint:
@@ -198,8 +171,6 @@ class Solver {
             this.xs = xs;
             this.ws = ws;
             this.c = c;
-
-            // TODO: Add any more logic you want here...
         }
 
         public boolean check(){
@@ -275,7 +246,6 @@ class Solver {
     private Variable[] variables;
     private List<int[]> foundSolutions;
     private int solutionsExplored = 0;
-    // TODO: Add any fields you want here...
 
     /**
      * Constructs a Solver using a list of variables and constraints.
@@ -343,11 +313,12 @@ class Solver {
      */
     private void solve(boolean findAll) {
         Propogate(findAll);
+
         System.out.println(solutionsExplored);
     }
 
     private boolean Propogate(boolean findAll) {
-        var variable = selectSmallestVariable();
+        Variable variable = selectSmallestVariable();
         if (variable == null) {
             int[] solution = new int[variables.length];
             for (int i = 0; i < variables.length; i++) {
@@ -357,14 +328,11 @@ class Solver {
             return !findAll;
         }
 
-        List<Integer> domain = new ArrayList<>(variable.domain);
-        for(var constraint: constraints){
-            if(constraint.containsVariable(variable))
-                domain = constraint.GetDomainForVariable(variable, domain);
-        }
+        List<Integer> domain = GetDomainForVariableOverConstraints(variable);
 
         for (int value : domain) {
             variable.Assign(value);
+
             if (CheckConstraintsFor(variable)) {
                 solutionsExplored++;
                 if (Propogate(findAll) && !findAll) {
@@ -383,11 +351,13 @@ class Solver {
         return true;
     }
 
-    private boolean CheckConstraints() {
-        for (Constraint c : constraints) {
-            if (!c.check()) return false;
+    private List<Integer> GetDomainForVariableOverConstraints(Variable var){
+        List<Integer> domain = new ArrayList<>(var.domain);
+        for(var constraint: constraints){
+            if(constraint.containsVariable(var))
+                domain = constraint.GetDomainForVariable(var, domain);
         }
-        return true;
+        return domain;
     }
 
     private Variable selectSmallestVariable() {
@@ -396,12 +366,4 @@ class Solver {
             .min(Comparator.comparingInt(v -> v.domain.size()))
             .orElse(null);
     }
-
-
-    // You are free to add any helper methods you might want to use within
-    //     the solver. Note, however, that you would not be allowed to call
-    //     them directly from within the `solveProblem`-method, since you
-    //     must copy your `solveProblem`-code from Part 1, which wouldn't
-    //     have these helper methods defined.
-
 }
