@@ -76,27 +76,15 @@ class Solver {
 
         public List<Integer> GetDomainForVariable(Variable var, List<Integer> domain)
         {
-            if(x1.equals(var))
-            {
-                if(x2.isAssigned()){
-                    if(domain.contains(x2.AssignedValue + c))
-                        domain.removeAll(Arrays.asList(x2.AssignedValue + c));
-                } else if(x2.domain.size() == 1){
-                    if(domain.contains(x2.domain.get(0) + c))
-                        domain.removeAll(Arrays.asList(x2.domain.get(0) + c));
+            if (x1.equals(var)) {
+                if (x2.isAssigned()) {
+                    domain.removeIf(value -> value == x2.AssignedValue + c);
+                }
+            } else if (x2.equals(var)) {
+                if (x1.isAssigned()) {
+                    domain.removeIf(value -> value == x1.AssignedValue - c);
                 }
             }
-            else
-            {
-                if(x1.isAssigned()){
-                    if(domain.contains(x1.AssignedValue - c))
-                        domain.removeAll(Arrays.asList(x1.AssignedValue - c));
-                } else if(x1.domain.size() == 1){
-                    if(domain.contains(x1.domain.get(0) - c))
-                        domain.removeAll(Arrays.asList(x1.domain.get(0) - c));
-                }
-            }
-
             return domain;
         }
 
@@ -304,15 +292,6 @@ class Solver {
             return !findAll;
         }
 
-        List<Integer> newDomain = GetDomainForVariableOverConstraints(variable);
-
-        if (newDomain.isEmpty()) {
-            return false;
-        }
-
-        variable.domain.clear();
-        variable.domain.addAll(newDomain);
-
         HashSet<Variable> connectedVariables = getAllConnectedVariables(variable);
         for (int value : variable.domain) {
             variable.Assign(value);
@@ -355,7 +334,7 @@ class Solver {
     private Variable selectSmallestVariable() {
         return Arrays.stream(variables)
             .filter(v -> !v.isAssigned())
-            .min(Comparator.comparingInt(v -> v.domain.size()))
+            .min(Comparator.comparingInt((Variable v) -> v.domain.size()))
             .orElse(null);
     }
 
@@ -388,15 +367,12 @@ class Solver {
     }
 
     private void getConnectedVariables(Constraint constraint, HashSet<Variable> set) {
-        if (constraint instanceof NotEqConstraint) {
-            NotEqConstraint notEq = (NotEqConstraint) constraint;
+        if (constraint instanceof NotEqConstraint notEq) {
             set.add(notEq.x2);
             set.add(notEq.x1);
-        } else if (constraint instanceof AllDiffConstraint) {
-            AllDiffConstraint allDif = (AllDiffConstraint) constraint;
+        } else if (constraint instanceof AllDiffConstraint allDif) {
             set.addAll(List.of(allDif.xs));
-        } else if (constraint instanceof IneqConstraint) {
-            IneqConstraint ineq = (IneqConstraint) constraint;
+        } else if (constraint instanceof IneqConstraint ineq) {
             set.addAll(List.of(ineq.xs));
         }
     }
