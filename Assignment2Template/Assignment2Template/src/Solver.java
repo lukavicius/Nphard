@@ -4,6 +4,7 @@ class Solver {
     static class Variable {
         public List<Integer> domain;
         public Integer AssignedValue;
+        private Stack<List<Integer>> domainHistory;
 
         /**
          * Constructs a Variable with a specified domain.
@@ -13,8 +14,8 @@ class Solver {
          * @param domain A list of integers, representing the domain of the variable.
          */
         public Variable(List<Integer> domain) {
-            // Variable initialization
             this.domain = new ArrayList<>(domain);
+            this.domainHistory = new Stack<>();
         }
 
         public Integer Min(){
@@ -34,10 +35,19 @@ class Solver {
         public boolean isAssigned() {
             return AssignedValue != null;
         }
+
+        public void saveDomain() {
+            domainHistory.push(new ArrayList<>(domain));
+        }
+
+        public void restoreDomain() {
+            if (!domainHistory.isEmpty()) {
+                domain = domainHistory.pop();
+            }
+        }
     }
 
     static abstract class Constraint {
-        public abstract boolean check();
         public abstract List<Integer> GetDomainForVariable(Variable var, List<Integer> domain);
         public abstract boolean containsVariable(Variable var);
     }
@@ -62,12 +72,6 @@ class Solver {
             this.x1 = x1;
             this.x2 = x2;
             this.c = c;
-        }
-
-        public boolean check(){
-            if(!x1.isAssigned() || !x2.isAssigned())
-                return true;
-            return x1.AssignedValue != x2.AssignedValue + c;
         }
 
         public List<Integer> GetDomainForVariable(Variable var, List<Integer> domain)
@@ -117,16 +121,6 @@ class Solver {
             this.xs = xs;
         }
 
-        public boolean check() {
-            Set<Integer> assigned = new HashSet<>();
-            for (Variable var : xs) {
-                if (var.isAssigned()) {
-                    if (!assigned.add(var.AssignedValue)) return false;
-                }
-            }
-            return true;
-        }
-
         public List<Integer> GetDomainForVariable(Variable var, List<Integer> domain)
         {
             Set<Integer> toRemove = new HashSet<>();
@@ -171,17 +165,6 @@ class Solver {
             this.xs = xs;
             this.ws = ws;
             this.c = c;
-        }
-
-        public boolean check(){
-            int total = 0;
-            for(int i = 0; i < xs.length; i++){
-                if (xs[i].isAssigned())
-                    total += xs[i].AssignedValue * ws[i];
-                else
-                    return true;
-            }
-            return total >= c;
         }
 
         public List<Integer> GetDomainForVariable(Variable var, List<Integer> domain) {
@@ -245,7 +228,6 @@ class Solver {
     private Constraint[] constraints;
     private Variable[] variables;
     private List<int[]> foundSolutions;
-    private int solutionsExplored = 0;
 
     /**
      * Constructs a Solver using a list of variables and constraints.
@@ -313,42 +295,52 @@ class Solver {
      */
     private void solve(boolean findAll) {
         Propogate(findAll);
-
-        System.out.println(solutionsExplored);
     }
 
     private boolean Propogate(boolean findAll) {
         Variable variable = selectSmallestVariable();
         if (variable == null) {
-            int[] solution = new int[variables.length];
-            for (int i = 0; i < variables.length; i++) {
-                solution[i] = variables[i].AssignedValue;
-            }
-            foundSolutions.add(solution);
+            AddSolution();
             return !findAll;
         }
 
-        List<Integer> domain = GetDomainForVariableOverConstraints(variable);
+        List<Integer> newDomain = GetDomainForVariableOverConstraints(variable);
 
-        for (int value : domain) {
+        if (newDomain.isEmpty()) {
+            return false;
+        }
+
+        variable.domain.clear();
+        variable.domain.addAll(newDomain);
+
+        HashSet<Variable> connectedVariables = getAllConnectedVariables(variable);
+        for (int value : variable.domain) {
             variable.Assign(value);
 
-            if (CheckConstraintsFor(variable)) {
-                solutionsExplored++;
+            if (prune(connectedVariables)) {
                 if (Propogate(findAll) && !findAll) {
                     return true;
                 }
             }
+
             variable.Unassign();
+            RestoreDomains(connectedVariables);
         }
         return false;
     }
 
-    private boolean CheckConstraintsFor(Variable var) {
-        for (Constraint c : constraints) {
-            if (c.containsVariable(var) && !c.check()) return false;
+    private void RestoreDomains(HashSet<Variable> connectedVariables) {
+        for(Variable var: connectedVariables){
+            var.restoreDomain();
         }
-        return true;
+    }
+
+    private void AddSolution(){
+        int[] solution = new int[variables.length];
+        for (int i = 0; i < variables.length; i++) {
+            solution[i] = variables[i].AssignedValue;
+        }
+        foundSolutions.add(solution);
     }
 
     private List<Integer> GetDomainForVariableOverConstraints(Variable var){
@@ -365,5 +357,47 @@ class Solver {
             .filter(v -> !v.isAssigned())
             .min(Comparator.comparingInt(v -> v.domain.size()))
             .orElse(null);
+    }
+
+    private boolean prune(HashSet<Variable> allConnectedVariables) {
+        for(Variable var: allConnectedVariables){
+            if (!var.isAssigned()) {
+                var.saveDomain();
+
+                List<Integer> newDomain = GetDomainForVariableOverConstraints(var);
+
+                if (newDomain.isEmpty()) {
+                    return false;
+                }
+
+                var.domain.clear();
+                var.domain.addAll(newDomain);
+            }
+        }
+        return true;
+    }
+
+    private HashSet<Variable> getAllConnectedVariables(Variable var){
+        HashSet<Variable> allConnectedVariables = new HashSet<>();
+        for (Constraint constraint : constraints) {
+            if (constraint.containsVariable(var)) {
+                getConnectedVariables(constraint, allConnectedVariables);
+            }
+        }
+        return allConnectedVariables;
+    }
+
+    private void getConnectedVariables(Constraint constraint, HashSet<Variable> set) {
+        if (constraint instanceof NotEqConstraint) {
+            NotEqConstraint notEq = (NotEqConstraint) constraint;
+            set.add(notEq.x2);
+            set.add(notEq.x1);
+        } else if (constraint instanceof AllDiffConstraint) {
+            AllDiffConstraint allDif = (AllDiffConstraint) constraint;
+            set.addAll(List.of(allDif.xs));
+        } else if (constraint instanceof IneqConstraint) {
+            IneqConstraint ineq = (IneqConstraint) constraint;
+            set.addAll(List.of(ineq.xs));
+        }
     }
 }
