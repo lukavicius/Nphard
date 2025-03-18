@@ -111,22 +111,18 @@ class Solver {
 
         public List<Integer> GetDomainForVariable(Variable var, List<Integer> domain)
         {
-            Set<Integer> toRemove = new HashSet<>();
-
             for (Variable x : xs) {
                 if(x.equals(var))
                     continue;
                 else if (x.isAssigned()) {
-                    toRemove.add(x.AssignedValue);
+                    domain.remove(x.AssignedValue);
                 } else if (x.domain.size() == 1) {
-                    toRemove.add(x.Min());
+                    domain.remove(x.Min());
                 }
 
                 if(domain.isEmpty())
                     return domain;
             }
-
-            domain.removeAll(toRemove);
 
             return domain;
         }
@@ -167,21 +163,12 @@ class Solver {
                 possibleOptions.sort(Collections.reverseOrder());
             }
 
-            for (int i = possibleOptions.size() - 1 ; i >= 0; i--) {
-                int total = 0, testedOption = possibleOptions.get(i);
+            if(calculateSum(xs, ws, possibleOptions.get(0), var) < c)
+                return new ArrayList<>();
 
-                for (int j = 0; j < xs.length; j++) {
-                    if (var.equals(xs[j])) {
-                        total += testedOption * ws[j];
-                    } else if (xs[j].isAssigned()) {
-                        total += xs[j].AssignedValue * ws[j];
-                    } else {
-                        if (ws[j] >= 0)
-                            total += xs[j].Max() * ws[j];
-                        else
-                            total += xs[j].Min() * ws[j];
-                    }
-                }
+            for (int i = possibleOptions.size() - 1 ; i >= 0; i--) {
+                int testedOption = possibleOptions.get(i),
+                total = calculateSum(xs, ws, testedOption, var);
 
                 if (total >= c) {
                     possibleOptions.subList(i + 1, possibleOptions.size()).clear();
@@ -193,6 +180,23 @@ class Solver {
             return new ArrayList<>();
         }
 
+        private Integer calculateSum(Variable[] xs, int[] ws, Integer testedOption, Variable var){
+            int total = 0;
+            for (int j = 0; j < xs.length; j++) {
+                if (var.equals(xs[j])) {
+                    total += testedOption * ws[j];
+                } else if (xs[j].isAssigned()) {
+                    total += xs[j].AssignedValue * ws[j];
+                } else {
+                    if (ws[j] >= 0)
+                        total += xs[j].Max() * ws[j];
+                    else
+                        total += xs[j].Min() * ws[j];
+                }
+            }
+
+            return total;
+        }
 
         public boolean containsVariable(Variable var){
             return Arrays.asList(xs).contains(var);
