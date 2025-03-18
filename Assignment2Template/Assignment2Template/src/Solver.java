@@ -4,7 +4,7 @@ class Solver {
     static class Variable {
         public SortedSet<Integer> domain;
         public Integer AssignedValue;
-        private Stack<SortedSet<Integer>> domainHistory;
+        private final Stack<SortedSet<Integer>> domainHistory;
 
         /**
          * Constructs a Variable with a specified domain.
@@ -53,9 +53,9 @@ class Solver {
     }
 
     static class NotEqConstraint extends Constraint {
-        private Variable x1;
-        private Variable x2;
-        private int c;
+        private final Variable x1;
+        private final Variable x2;
+        private final int c;
 
         /**
          * Constructs a NotEqConstraint:
@@ -79,10 +79,14 @@ class Solver {
             if (x1.equals(var)) {
                 if (x2.isAssigned()) {
                     domain.removeIf(value -> value == x2.AssignedValue + c);
+                } else if (x2.domain.size() == 1){
+                    domain.removeIf(value -> value == x2.Min() + c);
                 }
             } else if (x2.equals(var)) {
                 if (x1.isAssigned()) {
                     domain.removeIf(value -> value == x1.AssignedValue - c);
+                } else if (x1.domain.size() == 1){
+                    domain.removeIf(value -> value == x1.Min() + c);
                 }
             }
             return domain;
@@ -94,7 +98,7 @@ class Solver {
     }
 
     static class AllDiffConstraint extends Constraint {
-        private HashSet<Variable> xs;
+        private final HashSet<Variable> xs;
 
         /**
          * Constructs an AllDiffConstraint:
@@ -133,9 +137,9 @@ class Solver {
     }
 
     static class IneqConstraint extends Constraint {
-        private Variable[] xs;
-        private int[] ws;
-        private int c;
+        private final List<Variable> xs;
+        private final int[] ws;
+        private final int c;
 
         /**
          * Constructs an IneqConstraint:
@@ -149,13 +153,13 @@ class Solver {
          */
         public IneqConstraint(Variable[] xs, int[] ws, int c) {
             // Variable initialization
-            this.xs = xs;
+            this.xs = new ArrayList<>(List.of(xs));
             this.ws = ws;
             this.c = c;
         }
 
         public List<Integer> GetDomainForVariable(Variable var, List<Integer> possibleOptions) {
-            boolean isMinimize = ws[Arrays.stream(xs).toList().indexOf(var)] < 0;
+            boolean isMinimize = ws[xs.stream().toList().indexOf(var)] < 0;
 
             if (isMinimize) {
                 Collections.sort(possibleOptions);
@@ -163,12 +167,12 @@ class Solver {
                 possibleOptions.sort(Collections.reverseOrder());
             }
 
-            if(calculateSum(xs, ws, possibleOptions.get(0), var) < c)
+            if(calculateSum(possibleOptions.get(0), var) < c)
                 return new ArrayList<>();
 
             for (int i = possibleOptions.size() - 1 ; i >= 0; i--) {
                 int testedOption = possibleOptions.get(i),
-                total = calculateSum(xs, ws, testedOption, var);
+                total = calculateSum(testedOption, var);
 
                 if (total >= c) {
                     possibleOptions.subList(i + 1, possibleOptions.size()).clear();
@@ -180,48 +184,47 @@ class Solver {
             return new ArrayList<>();
         }
 
-        private Integer calculateSum(Variable[] xs, int[] ws, Integer testedOption, Variable var){
+        private Integer calculateSum(Integer testedOption, Variable var){
             int total = 0;
-            for (int j = 0; j < xs.length; j++) {
-                if (var.equals(xs[j])) {
+            for (int j = 0; j < xs.size(); j++) {
+                var x = xs.get(j);
+                if (var.equals(x)) {
                     total += testedOption * ws[j];
-                } else if (xs[j].isAssigned()) {
-                    total += xs[j].AssignedValue * ws[j];
-                } else {
-                    if (ws[j] >= 0)
-                        total += xs[j].Max() * ws[j];
-                    else
-                        total += xs[j].Min() * ws[j];
+                } else if (x.isAssigned()) {
+                    total += x.AssignedValue * ws[j];
+                } else
+                {
+                        if (ws[j] >= 0)
+                            total += x.Max() * ws[j];
+                        else
+                            total += x.Min() * ws[j];
+                    }
                 }
-            }
+
 
             return total;
         }
 
         public boolean containsVariable(Variable var){
-            return Arrays.asList(xs).contains(var);
+            return xs.contains(var);
         }
     }
 
-    private Constraint[] constraints;
-    private Variable[] variables;
-    private List<int[]> foundSolutions;
+    private final Constraint[] constraints;
+    private final Variable[] variables;
+    private final List<int[]> foundSolutions;
 
     /**
      * Constructs a Solver using a list of variables and constraints.
      * DO NOT REMOVE THIS METHOD OR CHANGE ITS SIGNATURE.
      *     However, you are allowed to change its behavior in any way you want.
      *
-     * @return An integer-array values to assign to the variables,
-     *             in the order they are provided.
      */
     public Solver(Variable[] variables, Constraint[] constraints) {
         // Initialize variables
         this.variables = variables;
         this.constraints = constraints;
         this.foundSolutions = new LinkedList<>();
-
-        // TODO: Add any more logic you want here...
     }
 
     /**
@@ -315,10 +318,11 @@ class Solver {
     private List<Integer> GetDomainForVariableOverConstraints(Variable var){
         List<Integer> domain = new ArrayList<>(var.domain);
         for(var constraint: constraints){
-            if(constraint.containsVariable(var))
+            if(constraint.containsVariable(var)) {
                 domain = constraint.GetDomainForVariable(var, domain);
-                if(domain.isEmpty())
+                if (domain.isEmpty())
                     return domain;
+            }
         }
         return domain;
     }
@@ -365,7 +369,7 @@ class Solver {
         } else if (constraint instanceof AllDiffConstraint allDif) {
             set.addAll(allDif.xs);
         } else if (constraint instanceof IneqConstraint ineq) {
-            set.addAll(List.of(ineq.xs));
+            set.addAll(ineq.xs);
         }
     }
 }
