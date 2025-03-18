@@ -2,9 +2,9 @@ import java.util.*;
 
 class Solver {
     static class Variable {
-        public List<Integer> domain;
+        public SortedSet<Integer> domain;
         public Integer AssignedValue;
-        private Stack<List<Integer>> domainHistory;
+        private Stack<SortedSet<Integer>> domainHistory;
 
         /**
          * Constructs a Variable with a specified domain.
@@ -14,15 +14,15 @@ class Solver {
          * @param domain A list of integers, representing the domain of the variable.
          */
         public Variable(List<Integer> domain) {
-            this.domain = new ArrayList<>(domain);
+            this.domain = new TreeSet<>(domain);
             this.domainHistory = new Stack<>();
         }
 
         public Integer Min(){
-            return Collections.min(domain);
+            return domain.first();
         }
 
-        public Integer Max(){ return Collections.max(domain); }
+        public Integer Max(){ return domain.last(); }
 
         public void Assign(int x){
             AssignedValue = x;
@@ -37,7 +37,7 @@ class Solver {
         }
 
         public void saveDomain() {
-            domainHistory.push(new ArrayList<>(domain));
+            domainHistory.push(new TreeSet<>(domain));
         }
 
         public void restoreDomain() {
@@ -116,11 +116,14 @@ class Solver {
             for (Variable x : xs) {
                 if(x.equals(var))
                     continue;
-                if (x.isAssigned()) {
+                else if (x.isAssigned()) {
                     toRemove.add(x.AssignedValue);
                 } else if (x.domain.size() == 1) {
-                    toRemove.add(x.domain.get(0));
+                    toRemove.add(x.Min());
                 }
+
+                if(domain.isEmpty())
+                    return domain;
             }
 
             domain.removeAll(toRemove);
@@ -156,7 +159,7 @@ class Solver {
         }
 
         public List<Integer> GetDomainForVariable(Variable var, List<Integer> domain) {
-            List<Integer> possibleOptions = new ArrayList<>(domain.stream().sorted().toList());
+            List<Integer> possibleOptions = domain;
             boolean isMinimize = ws[Arrays.stream(xs).toList().indexOf(var)] < 0;
             if(isMinimize){
                 for (int i = 0; i < possibleOptions.size(); i ++) {
@@ -173,10 +176,13 @@ class Solver {
                             else
                                 total += xs[j].Min() * ws[j];
                         }
+
+                        if (total > c)
+                            continue;
                     }
 
                     if (total < c) {
-                        var filtered =  new ArrayList<>(possibleOptions.stream().filter(x -> x < testedOption).toList());
+                        var filtered =  possibleOptions.stream().filter(x -> x < testedOption).toList();
                         return filtered;
                     }
                 }
@@ -196,10 +202,13 @@ class Solver {
                             else
                                 total += xs[j].Min() * ws[j];
                         }
+
+                        if (total > c)
+                            continue;
                     }
 
                     if (total < c) {
-                        var filtered = new ArrayList<>(possibleOptions.stream().filter(x -> x > testedOption).toList());
+                        var filtered = possibleOptions.stream().filter(x -> x > testedOption).toList();
                         return filtered;
                     }
                 }
