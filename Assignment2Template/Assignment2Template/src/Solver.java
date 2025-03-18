@@ -325,11 +325,7 @@ class Solver {
     }
 
     private boolean prune(HashSet<Variable> allConnectedVariables) {
-        List<Variable> list = allConnectedVariables.stream()
-            .sorted(Comparator.comparingInt(x -> x.domain.size()))
-            .toList();
-
-        for(Variable var: list){
+        for(Variable var: allConnectedVariables){
             if (!var.isAssigned()) {
                 var.saveDomain();
 
