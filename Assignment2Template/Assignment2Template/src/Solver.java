@@ -94,7 +94,7 @@ class Solver {
     }
 
     static class AllDiffConstraint extends Constraint {
-        private Variable[] xs;
+        private HashSet<Variable> xs;
 
         /**
          * Constructs an AllDiffConstraint:
@@ -106,7 +106,7 @@ class Solver {
          */
         public AllDiffConstraint(Variable[] xs) {
             // Variable initialization
-            this.xs = xs;
+            this.xs = new HashSet<>(List.of(xs));
         }
 
         public List<Integer> GetDomainForVariable(Variable var, List<Integer> domain)
@@ -132,7 +132,7 @@ class Solver {
         }
 
         public boolean containsVariable(Variable var){
-            return Arrays.asList(xs).contains(var);
+            return xs.contains(var);
         }
     }
 
@@ -158,64 +158,41 @@ class Solver {
             this.c = c;
         }
 
-        public List<Integer> GetDomainForVariable(Variable var, List<Integer> domain) {
-            List<Integer> possibleOptions = domain;
+        public List<Integer> GetDomainForVariable(Variable var, List<Integer> possibleOptions) {
             boolean isMinimize = ws[Arrays.stream(xs).toList().indexOf(var)] < 0;
-            if(isMinimize){
-                for (int i = 0; i < possibleOptions.size(); i ++) {
-                    int total = 0, testedOption = possibleOptions.get(i);
 
-                    for (int j = 0; j < xs.length; j++) {
-                        if (var.equals(xs[j])) {
-                            total += testedOption * ws[j];
-                        } else if (xs[j].isAssigned()) {
-                            total += xs[j].AssignedValue * ws[j];
-                        } else {
-                            if (ws[j] >= 0)
-                                total += xs[j].Max() * ws[j];
-                            else
-                                total += xs[j].Min() * ws[j];
-                        }
+            if (isMinimize) {
+                Collections.sort(possibleOptions);
+            } else {
+                possibleOptions.sort(Collections.reverseOrder());
+            }
 
-                        if (total > c)
-                            continue;
-                    }
+            for (int i = possibleOptions.size() - 1 ; i >= 0; i--) {
+                int total = 0, testedOption = possibleOptions.get(i);
 
-                    if (total < c) {
-                        var filtered =  possibleOptions.stream().filter(x -> x < testedOption).toList();
-                        return filtered;
+                for (int j = 0; j < xs.length; j++) {
+                    if (var.equals(xs[j])) {
+                        total += testedOption * ws[j];
+                    } else if (xs[j].isAssigned()) {
+                        total += xs[j].AssignedValue * ws[j];
+                    } else {
+                        if (ws[j] >= 0)
+                            total += xs[j].Max() * ws[j];
+                        else
+                            total += xs[j].Min() * ws[j];
                     }
                 }
-            }
-            else {
-                for (int i = possibleOptions.size() - 1; i >= 0; i--) {
-                    int total = 0, testedOption = possibleOptions.get(i);
 
-                    for (int j = 0; j < xs.length; j++) {
-                        if (var.equals(xs[j])) {
-                            total += testedOption * ws[j];
-                        } else if (xs[j].isAssigned()) {
-                            total += xs[j].AssignedValue * ws[j];
-                        } else {
-                            if (ws[j] >= 0)
-                                total += xs[j].Max() * ws[j];
-                            else
-                                total += xs[j].Min() * ws[j];
-                        }
+                if (total >= c) {
+                    possibleOptions.subList(i + 1, possibleOptions.size()).clear();
 
-                        if (total > c)
-                            continue;
-                    }
-
-                    if (total < c) {
-                        var filtered = possibleOptions.stream().filter(x -> x > testedOption).toList();
-                        return filtered;
-                    }
+                    return possibleOptions;
                 }
             }
 
-            return possibleOptions;
+            return new ArrayList<>();
         }
+
 
         public boolean containsVariable(Variable var){
             return Arrays.asList(xs).contains(var);
@@ -348,7 +325,11 @@ class Solver {
     }
 
     private boolean prune(HashSet<Variable> allConnectedVariables) {
-        for(Variable var: allConnectedVariables){
+        List<Variable> list = allConnectedVariables.stream()
+            .sorted(Comparator.comparingInt(x -> x.domain.size()))
+            .toList();
+
+        for(Variable var: list){
             if (!var.isAssigned()) {
                 var.saveDomain();
 
@@ -380,7 +361,7 @@ class Solver {
             set.add(notEq.x2);
             set.add(notEq.x1);
         } else if (constraint instanceof AllDiffConstraint allDif) {
-            set.addAll(List.of(allDif.xs));
+            set.addAll(allDif.xs);
         } else if (constraint instanceof IneqConstraint ineq) {
             set.addAll(List.of(ineq.xs));
         }
