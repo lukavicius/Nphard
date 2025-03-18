@@ -313,6 +313,8 @@ class Solver {
         for(var constraint: constraints){
             if(constraint.containsVariable(var))
                 domain = constraint.GetDomainForVariable(var, domain);
+                if(domain.isEmpty())
+                    return domain;
         }
         return domain;
     }
