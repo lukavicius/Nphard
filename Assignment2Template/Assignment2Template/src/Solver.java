@@ -2,6 +2,7 @@ import java.util.*;
 
 class Solver {
     static class Variable {
+        public HashSet<Variable> connectedVariables;
         public SortedSet<Integer> domain;
         public Integer AssignedValue;
         private final Stack<SortedSet<Integer>> domainHistory;
@@ -210,8 +211,8 @@ class Solver {
         }
     }
 
-    private final Constraint[] constraints;
-    private final Variable[] variables;
+    private final List<Constraint> constraints;
+    private final List<Variable> variables;
     private final List<int[]> foundSolutions;
 
     /**
@@ -222,8 +223,8 @@ class Solver {
      */
     public Solver(Variable[] variables, Constraint[] constraints) {
         // Initialize variables
-        this.variables = variables;
-        this.constraints = constraints;
+        this.variables = new ArrayList<>(List.of(variables));
+        this.constraints = new ArrayList<>(List.of(constraints));
         this.foundSolutions = new LinkedList<>();
     }
 
@@ -275,10 +276,10 @@ class Solver {
      *                    only one needs to be found.
      */
     private void solve(boolean findAll) {
-        Propogate(findAll);
+        Propagate(findAll);
     }
 
-    private boolean Propogate(boolean findAll) {
+    private boolean Propagate(boolean findAll) {
         Variable variable = selectSmallestVariable();
         if (variable == null) {
             AddSolution();
@@ -286,11 +287,11 @@ class Solver {
         }
 
         HashSet<Variable> connectedVariables = getAllConnectedVariables(variable);
-        for (int value : variable.domain) {
+        for (int value : orderValues(variable)) {
             variable.Assign(value);
 
             if (prune(connectedVariables)) {
-                if (Propogate(findAll) && !findAll) {
+                if (Propagate(findAll) && !findAll) {
                     return true;
                 }
             }
@@ -301,6 +302,12 @@ class Solver {
         return false;
     }
 
+    private List<Integer> orderValues(Variable var) {
+        List<Integer> values = new ArrayList<>(var.domain);
+        values.sort(Collections.reverseOrder());
+        return values;
+    }
+
     private void RestoreDomains(HashSet<Variable> connectedVariables) {
         for(Variable var: connectedVariables){
             var.restoreDomain();
@@ -308,9 +315,9 @@ class Solver {
     }
 
     private void AddSolution(){
-        int[] solution = new int[variables.length];
-        for (int i = 0; i < variables.length; i++) {
-            solution[i] = variables[i].AssignedValue;
+        int[] solution = new int[variables.size()];
+        for (int i = 0; i < variables.size(); i++) {
+            solution[i] = variables.get(i).AssignedValue;
         }
         foundSolutions.add(solution);
     }
@@ -328,11 +335,13 @@ class Solver {
     }
 
     private Variable selectSmallestVariable() {
-        return Arrays.stream(variables)
+        return variables.stream()
             .filter(v -> !v.isAssigned())
-            .min(Comparator.comparingInt((Variable v) -> v.domain.size()))
+            .min(Comparator
+                .comparingInt((Variable v) -> v.domain.size()))
             .orElse(null);
     }
+
 
     private boolean prune(HashSet<Variable> allConnectedVariables) {
         for(Variable var: allConnectedVariables){
@@ -345,20 +354,22 @@ class Solver {
                     return false;
                 }
 
-                var.domain.clear();
-                var.domain.addAll(newDomain);
+                var.domain.retainAll(newDomain);
             }
         }
         return true;
     }
 
     private HashSet<Variable> getAllConnectedVariables(Variable var){
+        if(var.connectedVariables != null)
+            return var.connectedVariables;
         HashSet<Variable> allConnectedVariables = new HashSet<>();
         for (Constraint constraint : constraints) {
             if (constraint.containsVariable(var)) {
                 getConnectedVariables(constraint, allConnectedVariables);
             }
         }
+        var.connectedVariables = allConnectedVariables;
         return allConnectedVariables;
     }
 
